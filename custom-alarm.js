@@ -117,54 +117,68 @@ templateCustomAlarm.innerHTML = `
 class CustomAlarm extends HTMLElement {
     constructor() {
         super();
+
+        this.alarmSound = new Audio("alarm.mp3");
     }
 
     connectedCallback() {
         this.appendChild((templateCustomAlarm.content.cloneNode(true)));
+        //define class attributes
         this.timerRef = this.querySelector(".timer-display");
         this.hourInput = this.querySelector("#hourInput");
         this.minuteInput = this.querySelector("#minuteInput");
         this.activeAlarms = this.querySelector(".activeAlarms");
-        this.setAlarm = this.querySelector("#set");
+        this.addAlarmButton = this.querySelector("#set");
+
         this.alarmsArray = [];
-        this.alarmSound = new Audio("alarm.mp3");
         this.initialHour = 0;
         this.initialMinute = 0;
         this.alarmIndex = 0;
 
         this.hourInput.value = this.appendZero(this.initialHour);
+        this.minuteInput.value = this.appendZero(this.initialMinute);
+
+        //add event listeners to inputs and buttons
         this.hourInput.addEventListener("input", () => {
             this.hourInput.value = this.inputCheck(this.hourInput.value);
         });
-        this.minuteInput.value = this.appendZero(this.initialMinute);
         this.minuteInput.addEventListener("input", () => {
             this.minuteInput.value = this.inputCheck(this.minuteInput.value);
         })
-
-        this.setAlarm.addEventListener("click", () => {
+        this.addAlarmButton.addEventListener("click", () => {
             this.alarmIndex += 1;
             //alarm object
-            let alarmObj = [];
+            let alarmObj = {};
             alarmObj.id = `${this.alarmIndex}_${this.hourInput.value}_${this.minuteInput.value}`;
             alarmObj.alarmHour = this.hourInput.value;
             alarmObj.alarmMinute = this.minuteInput.value;
             alarmObj.isActive = false;
-            console.log(alarmObj);
             this.alarmsArray.push(alarmObj);
             this.createAlarm(this, alarmObj);
             this.hourInput.value = this.appendZero(this.initialHour);
             this.minuteInput.value = this.appendZero(this.initialMinute);
         })
 
-        setInterval(this.displayTimer, 1000, this);
+        //update clock component with current time
+        setInterval(this.updateTimerAndCheckAlarms, 1000, this);
     }
 
-    //Append zeroes for single digit
+    static get observedAttributes() {
+        return ["alarm-sound"];
+    }
+
+    attributeChangedCallback(name, oldValue, newValue) {
+        if (name === "alarm-sound") {
+            this.alarmSound = new Audio(newValue);
+        }
+    }
+
+    //append zeroes for single digit values
     appendZero(value) {
          return value < 10 ? "0" + value : value;
     }
 
-    //Search for value in object
+    //search for value in object
     searchObject(parameter, value) {
         let alarmObject, objIndex, exists = false;
         this.alarmsArray.forEach((alarm, index) => {
@@ -178,18 +192,18 @@ class CustomAlarm extends HTMLElement {
         return [exists, alarmObject, objIndex];
     }
 
-    //Display time
-    displayTimer(component) {
+    //update clock time and check for alarms that should go off
+    updateTimerAndCheckAlarms(component) {
         let date = new Date();
         let [hours, minutes, seconds] = [
             component.appendZero(date.getHours()),
             component.appendZero(date.getMinutes()),
             component.appendZero(date.getSeconds()),
         ];
-        //Display current time
+        //display current time
         component.timerRef.innerHTML = `${hours}:${minutes}:${seconds}`;
 
-        //Alarm
+        //check alarms
         component.alarmsArray.forEach((alarm, index) => {
             if (alarm.isActive) {
                 if (`${alarm.alarmHour}:${alarm.alarmMinute}` === `${hours}:${minutes}`) {
@@ -208,45 +222,51 @@ class CustomAlarm extends HTMLElement {
         return inputValue;
     }
 
-    //Create alarm div
+    //create alarm div
     createAlarm(component, alarmObject) {
         //keys from object
         const {id, alarmHour, alarmMinute} = alarmObject;
+
         //alarm div
         let alarmDiv = document.createElement("div");
         alarmDiv.classList.add("alarm");
         alarmDiv.setAttribute("data-id", id);
         alarmDiv.innerHTML = `<span>${alarmHour}:${alarmMinute}</span>`;
+
         //checkbox
         let checkbox = document.createElement("input");
         checkbox.setAttribute("type", "checkbox");
         checkbox.addEventListener("click", (e) => {
            if (e.target.checked) {
-               component.startAlarm(e);
+               component.activateAlarm(e);
            } else {
-               component.stopAlarm(e);
+               component.disableAlarm(e);
            }
         });
         alarmDiv.appendChild(checkbox);
+
         //delete button
         let deleteButton = document.createElement("button");
         deleteButton.innerHTML = '<i class="fa-solid fa-trash"></i>';
         deleteButton.classList.add("deleteButton");
         deleteButton.addEventListener("click", (e) => component.deleteAlarm(e));
         alarmDiv.appendChild(deleteButton);
+
+        //add alarm div to alarms div
         component.activeAlarms.appendChild(alarmDiv);
     }
 
-    startAlarm(e) {
+    //activate an alarm
+    activateAlarm(e) {
         let searchId = e.target.parentElement.getAttribute("data-id");
         let [exists, obj, index] = this.searchObject("id", searchId);
         if (exists) {
             this.alarmsArray[index].isActive = true;
-            console.log(obj);
         }
     }
 
-    stopAlarm(e) {
+    //disable an alarm
+    disableAlarm(e) {
         let searchId = e.target.parentElement.getAttribute("data-id");
         let [exists, obj, index] = this.searchObject("id", searchId);
         if (exists) {
@@ -255,6 +275,7 @@ class CustomAlarm extends HTMLElement {
         }
     }
 
+    //delete an alarm
     deleteAlarm(e) {
         let searchId = e.target.parentElement.parentElement.getAttribute("data-id");
         let [exists, obj, index] = this.searchObject("id", searchId);
